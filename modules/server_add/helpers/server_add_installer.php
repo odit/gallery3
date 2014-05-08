@@ -1,7 +1,7 @@
 <?php defined("SYSPATH") or die("No direct script access.");
 /**
  * Gallery - a web based photo album viewer and editor
- * Copyright (C) 2000-2012 Bharat Mediratta
+ * Copyright (C) 2000-2013 Bharat Mediratta
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,10 +28,8 @@ class server_add_installer {
                   `parent_id` int(9),
                   `path` varchar(255) NOT NULL,
                   `task_id` int(9) NOT NULL,
-                  `md5` varchar(32) NOT NULL,
                   PRIMARY KEY (`id`))
                 DEFAULT CHARSET=utf8;");
-    module::set_version("server_add", 5);
     server_add::check_config();
   }
 
@@ -66,11 +64,6 @@ class server_add_installer {
                     PRIMARY KEY (`id`))
                   DEFAULT CHARSET=utf8;");
       module::set_version("server_add", $version = 4);
-    }
-
-    if ($version == 4) {
-      $db->query("ALTER TABLE {server_add_entries} ADD COLUMN `md5` varchar(32) NOT NULL");
-      module::set_version("server_add", $version = 5);
     }
   }
 

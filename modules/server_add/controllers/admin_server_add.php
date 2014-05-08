@@ -1,7 +1,7 @@
 <?php defined("SYSPATH") or die("No direct script access.");
 /**
  * Gallery - a web based photo album viewer and editor
- * Copyright (C) 2000-2012 Bharat Mediratta
+ * Copyright (C) 2000-2013 Bharat Mediratta
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@ class Admin_Server_Add_Controller extends Admin_Controller {
     $view->page_title = t("Add from server");
     $view->content = new View("admin_server_add.html");
     $view->content->form = $this->_get_admin_form();
-    $view->content->form_additional = $this->_get_admin_form_additional();
     $paths = unserialize(module::get_var("server_add", "authorized_paths", "a:0:{}"));
     $view->content->paths = array_keys($paths);
 
@@ -36,12 +35,12 @@ class Admin_Server_Add_Controller extends Admin_Controller {
     $form = $this->_get_admin_form();
     $paths = unserialize(module::get_var("server_add", "authorized_paths", "a:0:{}"));
     if ($form->validate()) {
-      if (is_link($form->add_path->path->value)) {
+      $path = html_entity_decode($form->add_path->path->value);
+      if (is_link($path)) {
         $form->add_path->path->add_error("is_symlink", 1);
-      } else if (!is_readable($form->add_path->path->value)) {
+      } else if (!is_readable($path)) {
         $form->add_path->path->add_error("not_readable", 1);
       } else {
-        $path = $form->add_path->path->value;
         $paths[$path] = 1;
         module::set_var("server_add", "authorized_paths", serialize($paths));
         message::success(t("Added path %path", array("path" => $path)));
@@ -55,16 +54,6 @@ class Admin_Server_Add_Controller extends Admin_Controller {
     $view->content->form = $form;
     $view->content->paths = array_keys($paths);
     print $view;
-  }
-
-  public function save_options() {
-    access::verify_csrf();
-    $form = $this->_get_admin_form_additional();
-    if($form->validate()) {
-      module::set_var("server_add", "skip_duplicates", $form->addition_options->skip_duplicates->checked);
-      module::set_var("server_add", "process_updates", $form->addition_options->process_updates->checked);
-    }
-    url::redirect("admin/server_add");
   }
 
   public function remove_path() {
@@ -83,14 +72,15 @@ class Admin_Server_Add_Controller extends Admin_Controller {
 
   public function autocomplete() {
     $directories = array();
-    $path_prefix = Input::instance()->get("q");
+
+    $path_prefix = Input::instance()->get("term");
     foreach (glob("{$path_prefix}*") as $file) {
       if (is_dir($file) && !is_link($file)) {
-        $directories[] = $file;
+        $directories[] = (string)html::clean($file);
       }
     }
 
-    print implode("\n", $directories);
+    ajax::response(json_encode($directories));
   }
 
   private function _get_admin_form() {
@@ -101,20 +91,6 @@ class Admin_Server_Add_Controller extends Admin_Controller {
       ->error_messages("not_readable", t("This directory is not readable by the webserver"))
       ->error_messages("is_symlink", t("Symbolic links are not allowed"));
     $add_path->submit("add")->value(t("Add Path"));
-
-    return $form;
-  }
-
-  private function _get_admin_form_additional() {
-    $form = new Forge("admin/server_add/save_options", "", "post",
-                      array("id" => "g-server-add-admin-form"));
-
-    $group = $form->group("addition_options")->label(t("Additional options"));
-    $group->checkbox("skip_duplicates")->label(t("Skip duplicates?"))->id("g-server-add-skip-duplicates")
-      ->checked(module::get_var("server_add", "skip_duplicates", false));
-    $group->checkbox("process_updates")->label(t("Process updates?"))->id("g-server-add-process-updates")
-      ->checked(module::get_var("server_add", "process_updates", false));
-    $group->submit("save")->value(t("Save"));
 
     return $form;
   }
