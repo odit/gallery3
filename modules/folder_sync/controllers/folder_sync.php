@@ -195,8 +195,23 @@ class Folder_Sync_Controller extends Controller {
               if(empty($entry_exists->added) || empty($entry_exists->md5) || $entry_exists->added != filemtime($child_path) || $entry_exists->md5 != md5_file($child_path))
               {
                 $item = ORM::factory("item", $entry_exists->item_id);
-                $item->set_data_file($child_path);
-                $item->save();
+                if($item->loaded())
+                {
+                    $item->set_data_file($child_path);
+                try
+                    {
+                    $item->save();
+                    }
+                    catch(ORM_Validation_Exception $e)
+                    {
+                    print("Error saving the image (ID = {$item->id}) with the new data file.\n");
+                    exit();
+                    }
+                }
+                else
+                {
+                    $entry_exists->delete();
+                }
               }
               // since it's an update, don't count too much towards the limit
               $limit-=0.25;
