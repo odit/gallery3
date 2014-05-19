@@ -81,12 +81,15 @@ class Folder_Sync_Controller extends Controller {
   static function cron()
   {
     $owner_id = 2;
+	
+	$debug = !empty($_SERVER['argv']) && $_SERVER['argv'][1] == "debug";
     
     // Login as Admin
+	$debug and print "Starting user session\n";
     $session = Session::instance();
     $session->delete("user");
     auth::login(IdentityProvider::instance()->admin_user());
- 
+
     // check if some folders are still unprocessed from previous run
     $entry = ORM::factory("folder_sync_entry")
       ->where("is_directory", "=", 1)
@@ -95,10 +98,13 @@ class Folder_Sync_Controller extends Controller {
       ->find();
     if (!$entry->loaded())
     {
+	  $debug and print "Adding default folders\n";
       $paths = unserialize(module::get_var("folder_sync", "authorized_paths"));
       foreach (array_keys($paths) as $path) {
         if (folder_sync::is_valid_path($path)) {
           $path = rtrim($path, "/");
+
+	      $debug and print " * $path\n";
 
           $entry = ORM::factory("folder_sync_entry")
             ->where("is_directory", "=", 1)
@@ -125,19 +131,28 @@ class Folder_Sync_Controller extends Controller {
     }
 
     // Scan and add files
+	$debug and print "Starting the loop\n";
     $done = false;
     $limit = 500;
     while(!$done && $limit > 0) {
+	  $debug and print "Loop started: Limit = $limit\n";
       $entry = ORM::factory("folder_sync_entry")
         ->where("is_directory", "=", 1)
         ->where("checked", "=", 0)
         ->order_by("id", "ASC")
         ->find();
 
-      // get the parrent
-      $parent = ORM::factory("item", $entry->item_id);
-      
       if ($entry->loaded()) {
+		// get the parrent
+		$parent = ORM::factory("item", $entry->item_id);
+		if(!$parent->loaded())
+		{
+		  $debug and print "Deleting entry #{$entry->id} pointing to missing item #{$entry->item_id}\n";
+		  //$entry->delete();
+		  //continue;
+		}
+
+  	    $debug and print "Scanning folder: {$entry->path}\n";
         $child_paths = glob(preg_quote($entry->path) . "/*");
         if (!$child_paths) {
           $child_paths = glob("{$entry->path}/*");
@@ -146,18 +161,21 @@ class Folder_Sync_Controller extends Controller {
           $name = basename($child_path);
           $title = item::convert_filename_to_title($name);
 
+	      $debug and print "Found $child_path...";
+		  
           if (is_dir($child_path)) {
-            // check if album imported
+			$debug and print "folder\n";
             $entry_exists = ORM::factory("folder_sync_entry")
               ->where("is_directory", "=", 1)
               ->where("path", "=", $child_path)
               ->find();
 
-            //print "check if we already imported ...";
             if($entry_exists && $entry_exists->loaded()) {
+			  $debug and print "Folder is already imported, marked to re-sync.\n";
               $entry_exists->checked = 0;
               $entry_exists->save();
             } else {
+			  $debug and print "Adding new folder.\n";
               $album = ORM::factory("item");
               $album->type = "album";
               $album->parent_id = $parent->id;
@@ -177,10 +195,12 @@ class Folder_Sync_Controller extends Controller {
               $child_entry->save();
             }
           } else {
+			$debug and print "file\n";
             $ext = strtolower(pathinfo($child_path, PATHINFO_EXTENSION));
             if (!in_array($ext, legal_file::get_extensions()) || !filesize($child_path))
             {
               // Not importable, skip it.
+			  $debug and print "File is incompatible. Skipping.\n";
               continue;
             }
             
@@ -192,12 +212,14 @@ class Folder_Sync_Controller extends Controller {
 
             if($entry_exists && $entry_exists->loaded())
             {
+			  $debug and print "Image is already imported...";
               if(empty($entry_exists->added) || empty($entry_exists->md5) || $entry_exists->added != filemtime($child_path) || $entry_exists->md5 != md5_file($child_path))
               {
                 $item = ORM::factory("item", $entry_exists->item_id);
                 if($item->loaded())
                 {
-                    $item->set_data_file($child_path);
+                  $item->set_data_file($child_path);
+				  $debug and print "updating.\n";
                 try
                     {
                     $item->save();
@@ -210,15 +232,21 @@ class Folder_Sync_Controller extends Controller {
                 }
                 else
                 {
-                    $entry_exists->delete();
+				  $debug and print "deleting.\n";
+                  $entry_exists->delete();
                 }
               }
+			  else
+			  {
+			    $debug and print "skipping.\n";
+			  }
               // since it's an update, don't count too much towards the limit
               $limit-=0.25;
             }
             else
             {
               if (in_array($ext, legal_file::get_photo_extensions())) {
+				$debug and print "Adding new photo.\n";
                 $item = ORM::factory("item");
                 $item->type = "photo";
                 $item->parent_id = $parent->id;
@@ -228,6 +256,7 @@ class Folder_Sync_Controller extends Controller {
                 $item->owner_id = $owner_id;
                 $item->save();
               } else if (in_array($ext, legal_file::get_movie_extensions())) {
+				$debug and print "Adding new video.\n";
                 $item = ORM::factory("item");
                 $item->type = "movie";
                 $item->parent_id = $parent->id;
@@ -252,7 +281,10 @@ class Folder_Sync_Controller extends Controller {
           }
           // Did we hit the limit?
           if($limit <= 0)
+		  {
+		    $debug and print "Reached the limit. Exiting.\n";
             exit;
+		  }
         }
 
         // We've processed this entry unless we reached a limit.
@@ -263,6 +295,7 @@ class Folder_Sync_Controller extends Controller {
         }
       } else {
         $done = true;
+	    $debug and print "All folders are processed. Exiting.\n";
       }
     }
     
