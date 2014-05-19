@@ -82,7 +82,7 @@ class Folder_Sync_Controller extends Controller {
   {
     $owner_id = 2;
 	
-	$debug = !empty($_SERVER['argv']) && $_SERVER['argv'][1] == "debug";
+	$debug = !empty($_SERVER['argv']) && isset($_SERVER['argv'][1]) && $_SERVER['argv'][1] == "debug";
     
     // Login as Admin
 	$debug and print "Starting user session\n";
