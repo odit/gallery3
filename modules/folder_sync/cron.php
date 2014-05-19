@@ -60,6 +60,8 @@ Kohana::setup();
 
 Event::run('system.ready');
 
+ob_end_flush();
+
 Folder_Sync_Controller::cron();
 
 // Release lock
